@@ -17,7 +17,7 @@ const (
 	SendPushInApp                     // 1 << 6 = 64
 )
 
-const totalUsers = 100_000_000
+const totalUsers = 1_000_000_000
 
 func main() {
 	// assume that we have %totalUsers% with notification flags, just some of them armed
