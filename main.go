@@ -43,7 +43,7 @@ func main() {
 		}
 	}
 
-	fmt.Printf("time elapsed(sec): %f\ntotal users found %d\n", time.Since(start).Seconds(), cnt)
+	fmt.Printf("time elapsed: %v\ntotal users found %d\n", time.Since(start), cnt)
 }
 
 func SendMessage(user, options uint32, message string) {
