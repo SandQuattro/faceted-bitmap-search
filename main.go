@@ -3,9 +3,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"go-bitmask-search/searcher"
 	"go-bitmask-search/sender"
 	"golang.org/x/sync/errgroup"
 	"math/rand"
+	"runtime"
 	"time"
 )
 
@@ -19,7 +21,7 @@ const (
 	SendPushInApp                     // 1 << 6 = 64
 )
 
-const totalUsers = 1_000
+const totalUsers = 100_000_000
 
 func main() {
 	// assume that we have %totalUsers% with notification flags, just some of them armed
@@ -29,36 +31,36 @@ func main() {
 		users[i] = rand.Uint32()
 	}
 
-	cnt := 0
-	//bs := make([]byte, 0)
-
-	fmt.Printf("Start searching in users total set: %d\n", totalUsers)
-	start := time.Now()
+	bitmask := createBitmask(SendSlack)
+	found := searcher.Search(users, bitmask)
 
 	g := errgroup.Group{}
-	for _, user := range users {
-		bitmask := createBitmask(SendSlack)
-		//binary.LittleEndian.PutUint32(bs, bitmask)
-		if user&bitmask == bitmask {
-			// here we are searching users with specific flags
-			cnt++
-			message := "Yo! test message"
 
-			g.Go(func() error {
-				err := SendMessage(user, bitmask, message)
-				if err != nil {
-					return err
-				}
-				return nil
-			})
-		}
+	cnt := 0
+	// limit our concurrent processing using errgroup semaphore
+	g.SetLimit(runtime.NumCPU())
+
+	fmt.Printf("sending %d notifications to users\n", len(found))
+
+	start := time.Now()
+	for _, user := range found {
+		cnt++
+		message := "Yo! test message"
+
+		g.Go(func() error {
+			err := SendMessage(user, bitmask, message)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
 	}
 
 	if err := g.Wait(); err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("time elapsed: %v\ntotal users found %d\n", time.Since(start), cnt)
+	fmt.Printf("notifications processing elapsed: %v\ntotal notifications: %d\n", time.Since(start), len(found))
 }
 
 func createBitmask(option ...uint32) uint32 {
