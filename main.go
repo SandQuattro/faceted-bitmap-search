@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-	"log"
+	"go-bitmask-search/sender"
+	"golang.org/x/sync/errgroup"
 	"math/rand"
 	"time"
 )
@@ -17,7 +19,7 @@ const (
 	SendPushInApp                     // 1 << 6 = 64
 )
 
-const totalUsers = 1_000_000_000
+const totalUsers = 1_000
 
 func main() {
 	// assume that we have %totalUsers% with notification flags, just some of them armed
@@ -32,68 +34,62 @@ func main() {
 
 	fmt.Printf("Start searching in users total set: %d\n", totalUsers)
 	start := time.Now()
+
+	g := errgroup.Group{}
 	for _, user := range users {
-		bitmask := SendEmail | SendSlack
+		bitmask := createBitmask(SendSlack)
 		//binary.LittleEndian.PutUint32(bs, bitmask)
 		if user&bitmask == bitmask {
 			// here we are searching users with specific flags
 			cnt++
-			// message := "Yo! test message"
-			// go SendMessage(user, options, message)
+			message := "Yo! test message"
+
+			g.Go(func() error {
+				err := SendMessage(user, bitmask, message)
+				if err != nil {
+					return err
+				}
+				return nil
+			})
 		}
+	}
+
+	if err := g.Wait(); err != nil {
+		panic(err)
 	}
 
 	fmt.Printf("time elapsed: %v\ntotal users found %d\n", time.Since(start), cnt)
 }
 
-func SendMessage(user, options uint32, message string) {
+func createBitmask(option ...uint32) uint32 {
+	var result uint32
+	for _, val := range option {
+		result |= val
+	}
+	return result
+}
+
+func SendMessage(user, options uint32, message string) error {
 	if options&SendSMS != 0 {
-		sendSMS(user, message)
+		return sender.SendSMS(user, message)
 	}
 	if options&SendEmail != 0 {
-		sendEmail(user, message)
+		return sender.SendEmail(user, message)
 	}
 	if options&SendPushInApp != 0 {
-		sendInApp(user, message)
+		return sender.SendInApp(user, message)
 	}
 	if options&SendTelegram != 0 {
-		sendInTelegram(user, message)
+		return sender.SendInTelegram(user, message)
 	}
 	if options&SendDiscord != 0 {
-		sendInDiscord(user, message)
+		return sender.SendInDiscord(user, message)
 	}
 	if options&SendSlack != 0 {
-		//sendInSlack(user, message)
+		return sender.SendInSlack(user, message)
 	}
 	if options&SendMattermost != 0 {
-		//sendInMattermost(user, message)
+		return sender.SendInMattermost(user, message)
 	}
-}
-
-func sendSMS(user uint32, message string) {
-	log.Printf("Sending message %s to user: %b by SMS", message, user)
-}
-
-func sendEmail(user uint32, message string) {
-	log.Printf("Sending message %s to user: %b by Email", message, user)
-}
-
-func sendInApp(user uint32, message string) {
-	log.Printf("Sending message %s to user: %b in App", message, user)
-}
-
-func sendInTelegram(user uint32, message string) {
-	log.Printf("Sending message %s to user: %b by Telegram", message, user)
-}
-
-func sendInDiscord(user uint32, message string) {
-	log.Printf("Sending message %s to user: %b by Discord", message, user)
-}
-
-func sendInSlack(user uint32, message string) {
-	log.Printf("Sending message %s to user: %b by Slack", message, user)
-}
-
-func sendInMattermost(user uint32, message string) {
-	log.Printf("Sending message %s to user: %b by Mattermost", message, user)
+	return errors.New("unknown option")
 }
