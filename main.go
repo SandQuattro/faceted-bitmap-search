@@ -2,10 +2,10 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"go-bitmask-search/searcher"
 	"go-bitmask-search/sender"
 	"golang.org/x/sync/errgroup"
+	"log"
 	"math/rand"
 	"runtime"
 	"time"
@@ -31,7 +31,8 @@ func main() {
 		users[i] = rand.Uint32()
 	}
 
-	bitmask := createBitmask(SendSlack)
+	// default little endian bit order
+	bitmask := createBitmask(SendSlack | SendSMS)
 	found := searcher.Search(users, bitmask)
 
 	g := errgroup.Group{}
@@ -40,7 +41,7 @@ func main() {
 	// limit our concurrent processing using errgroup semaphore
 	g.SetLimit(runtime.NumCPU())
 
-	fmt.Printf("sending %d notifications to users\n", len(found))
+	log.Printf("sending %d notifications to users\n", len(found))
 
 	start := time.Now()
 	for _, user := range found {
@@ -60,7 +61,7 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Printf("notifications processing elapsed: %v\ntotal notifications: %d\n", time.Since(start), len(found))
+	log.Printf("notifications processing elapsed: %v\ntotal notifications: %d\n", time.Since(start), len(found))
 }
 
 func createBitmask(option ...uint32) uint32 {
