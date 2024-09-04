@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// Search options in user data lake
 func Search(users []uint32, bitmask uint32) []uint32 {
 	found := make([]uint32, len(users)/2)
 
@@ -12,7 +13,7 @@ func Search(users []uint32, bitmask uint32) []uint32 {
 	start := time.Now()
 
 	for _, user := range users {
-		//binary.LittleEndian.PutUint32(bs, bitmask)
+		// binary.LittleEndian.PutUint32(bs, bitmask)
 		if user&bitmask == bitmask {
 			// here we are searching users with specific flags
 			found = append(found, user)

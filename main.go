@@ -2,8 +2,10 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"go-bitmask-search/searcher"
 	"go-bitmask-search/sender"
+	"go-bitmask-search/util"
 	"golang.org/x/sync/errgroup"
 	"log"
 	"math/rand"
@@ -33,6 +35,9 @@ func main() {
 
 	// default little endian bit order
 	bitmask := createBitmask(SendSlack | SendSMS)
+	fmt.Print("Created Bitmask: ")
+	util.PrintAsBinary(bitmask)
+
 	found := searcher.Search(users, bitmask)
 
 	g := errgroup.Group{}
@@ -72,6 +77,7 @@ func createBitmask(option ...uint32) uint32 {
 	return result
 }
 
+// Se
 func SendMessage(user, options uint32, message string) error {
 	if options&SendSMS != 0 {
 		return sender.SendSMS(user, message)
