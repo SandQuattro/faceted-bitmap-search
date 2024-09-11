@@ -30,13 +30,21 @@ func main() {
 	fmt.Print("Created Bitmask: ")
 	util.PrintAsBinary(bitmask)
 
-	mu := sync.Mutex{}
 	g := errgroup.Group{}
 
+	// STAGE 1, BINARY SEARCH
+	result := stage1(&g, users, bitmask, cores)
+
+	// STAGE 2, SENDING MESSAGES, USING PREVIOUS STEP CHANNELS FOUND
+	stage2(&g, bitmask, result)
+
+}
+
+func stage1(g *errgroup.Group, users []uint32, bitmask uint32, cores int) []uint32 {
+	result := make([]uint32, 0)
 	chunkSize := len(users) / cores
 
-	result := make([]uint32, 0)
-
+	mu := sync.Mutex{}
 	once := sync.Once{}
 	var start time.Time
 
@@ -74,16 +82,18 @@ func main() {
 
 	log.Printf("Found %d options in %d users, time: %v", len(result), len(users), time.Since(start))
 
-	// STAGE 2, SENDING MESSAGES, USING PREVIOUS STEP CHANNELS FOUND
+	return result
+}
 
+func stage2(g *errgroup.Group, bitmask uint32, bitmaskFound []uint32) {
 	cnt := 0
 	// limit our concurrent processing using errgroup semaphore
 	g.SetLimit(runtime.NumCPU())
 
-	log.Printf("sending %d notifications to users\n", len(result))
+	log.Printf("sending %d notifications to users\n", len(bitmaskFound))
 
-	start = time.Now()
-	for _, user := range result {
+	start := time.Now()
+	for _, user := range bitmaskFound {
 		cnt++
 		message := "Yo! test message"
 
@@ -100,5 +110,5 @@ func main() {
 		panic(err)
 	}
 
-	log.Printf("notifications processing elapsed: %v\ntotal notifications: %d\n", time.Since(start), len(result))
+	log.Printf("notifications processing elapsed: %v\ntotal notifications: %d\n", time.Since(start), len(bitmaskFound))
 }
