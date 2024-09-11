@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"go-bitmask-search/searcher"
 	"go-bitmask-search/sender"
@@ -10,22 +9,15 @@ import (
 	"log"
 	"math/rand"
 	"runtime"
+	"sync"
 	"time"
-)
-
-const (
-	SendSMS        uint32 = 1 << iota // 1 << 0 = 1
-	SendEmail                         // 1 << 1 = 2
-	SendTelegram                      // 1 << 2 = 4
-	SendDiscord                       // 1 << 3 = 8
-	SendSlack                         // 1 << 4 = 16
-	SendMattermost                    // 1 << 5 = 32
-	SendPushInApp                     // 1 << 6 = 64
 )
 
 const totalUsers = 100_000_000
 
 func main() {
+	cores := runtime.NumCPU()
+
 	// assume that we have %totalUsers% with notification flags, just some of them armed
 	// we can have int32 = 32 flags or even more, using int64
 	users := make([]uint32, totalUsers)
@@ -34,27 +26,69 @@ func main() {
 	}
 
 	// default little endian bit order
-	bitmask := createBitmask(SendSlack | SendSMS)
+	bitmask := searcher.CreateBitmask(searcher.SendSlack | searcher.SendSMS | searcher.SendTelegram)
 	fmt.Print("Created Bitmask: ")
 	util.PrintAsBinary(bitmask)
 
-	found := searcher.Search(users, bitmask)
-
+	mu := sync.Mutex{}
 	g := errgroup.Group{}
+
+	chunkSize := len(users) / cores
+
+	result := make([]uint32, 0)
+
+	once := sync.Once{}
+	var start time.Time
+
+	for i := 0; i < cores; i++ {
+		g.Go(func() error {
+			once.Do(func() {
+				log.Print("time")
+				start = time.Now()
+			})
+			s := 0
+			e := chunkSize
+
+			if i > 0 {
+				s = chunkSize * i
+				e = s + chunkSize
+				if i == cores-1 {
+					e = len(users)
+				}
+			}
+
+			log.Printf("Start searching in users subset from %d to %d, chunk: %d using bitmask: %32b\n", s, e, i, bitmask)
+			found := searcher.Search(users[s:e], bitmask)
+
+			mu.Lock()
+			result = append(result, found...)
+			mu.Unlock()
+
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("Found %d options in %d users, time: %v", len(result), len(users), time.Since(start))
+
+	// STAGE 2, SENDING MESSAGES, USING PREVIOUS STEP CHANNELS FOUND
 
 	cnt := 0
 	// limit our concurrent processing using errgroup semaphore
 	g.SetLimit(runtime.NumCPU())
 
-	log.Printf("sending %d notifications to users\n", len(found))
+	log.Printf("sending %d notifications to users\n", len(result))
 
-	start := time.Now()
-	for _, user := range found {
+	start = time.Now()
+	for _, user := range result {
 		cnt++
 		message := "Yo! test message"
 
 		g.Go(func() error {
-			err := SendMessage(user, bitmask, message)
+			err := sender.SendMessage(user, bitmask, message)
 			if err != nil {
 				return err
 			}
@@ -66,39 +100,5 @@ func main() {
 		panic(err)
 	}
 
-	log.Printf("notifications processing elapsed: %v\ntotal notifications: %d\n", time.Since(start), len(found))
-}
-
-func createBitmask(option ...uint32) uint32 {
-	var result uint32
-	for _, val := range option {
-		result |= val
-	}
-	return result
-}
-
-// Se
-func SendMessage(user, options uint32, message string) error {
-	if options&SendSMS != 0 {
-		return sender.SendSMS(user, message)
-	}
-	if options&SendEmail != 0 {
-		return sender.SendEmail(user, message)
-	}
-	if options&SendPushInApp != 0 {
-		return sender.SendInApp(user, message)
-	}
-	if options&SendTelegram != 0 {
-		return sender.SendInTelegram(user, message)
-	}
-	if options&SendDiscord != 0 {
-		return sender.SendInDiscord(user, message)
-	}
-	if options&SendSlack != 0 {
-		return sender.SendInSlack(user, message)
-	}
-	if options&SendMattermost != 0 {
-		return sender.SendInMattermost(user, message)
-	}
-	return errors.New("unknown option")
+	log.Printf("notifications processing elapsed: %v\ntotal notifications: %d\n", time.Since(start), len(result))
 }
