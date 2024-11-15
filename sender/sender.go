@@ -3,32 +3,49 @@ package sender
 import (
 	"errors"
 	"go-bitmask-search/searcher"
+	"log"
 )
 
 // SendMessage sends message
 func SendMessage(user, options uint32, message string) error {
+	var (
+		err   error
+		found bool
+	)
+
 	if options&searcher.SendSMS != 0 {
-		return SendSMS(user, message)
+		err = SendSMS(user, message)
+		found = true
 	}
 	if options&searcher.SendEmail != 0 {
-		return SendEmail(user, message)
+		err = SendEmail(user, message)
+		found = true
 	}
 	if options&searcher.SendPushInApp != 0 {
-		return SendInApp(user, message)
+		err = SendInApp(user, message)
+		found = true
 	}
 	if options&searcher.SendTelegram != 0 {
-		return SendInTelegram(user, message)
+		err = SendInTelegram(user, message)
+		found = true
 	}
 	if options&searcher.SendDiscord != 0 {
-		return SendInDiscord(user, message)
+		err = SendInDiscord(user, message)
+		found = true
 	}
 	if options&searcher.SendSlack != 0 {
-		return SendInSlack(user, message)
+		err = SendInSlack(user, message)
+		found = true
 	}
 	if options&searcher.SendMattermost != 0 {
-		return SendInMattermost(user, message)
+		err = SendInMattermost(user, message)
+		found = true
 	}
-	return errors.New("unknown option")
+	if !found {
+		return errors.New("options not fond")
+	}
+
+	return err
 }
 
 func SendSMS(user uint32, message string) error {
@@ -67,5 +84,5 @@ func SendInMattermost(user uint32, message string) error {
 }
 
 func helper(user uint32, message, channel string) {
-	//log.Printf("Sending message %s to user: %b by %s", message, user, channel)
+	log.Printf("Sending message %s to user: %b by %s", message, user, channel)
 }
